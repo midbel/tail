@@ -2,7 +2,6 @@ package tail
 
 import (
 	"bytes"
-	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -28,7 +27,6 @@ func tail(r io.ReadSeeker, lines int) error {
 	var (
 		buf    []byte
 		step   int64
-		got    int
 		seek   int64
 		offset int64
 		err    error
@@ -38,24 +36,19 @@ func tail(r io.ReadSeeker, lines int) error {
 	}
 	offset = seek
 
-	if seek < SeekStep {
+	if seek >= SeekStep {
 		buf, step = make([]byte, SeekStep), SeekStep
 	} else {
 		buf, step = make([]byte, seek), seek
 	}
-
-	for got < lines {
+	for lines > 0 {
 		if seek, err = seekReader(r, seek-step); err != nil {
 			return fmt.Errorf("seek: %s", err)
 		}
-		if n, err := io.ReadFull(r, buf); err != nil {
-			if errors.Is(err, io.ErrUnexpectedEOF) {
-				got += bytes.Count(buf[:n], []byte{'\n'})
-				break
-			}
+		if _, err := io.ReadFull(r, buf); err != nil {
 			return fmt.Errorf("read: %s", err)
 		}
-		got += bytes.Count(buf, []byte{'\n'})
+		lines -= bytes.Count(buf, []byte{'\n'})
 		if seek == 0 {
 			break
 		}
@@ -66,19 +59,17 @@ func tail(r io.ReadSeeker, lines int) error {
 			return fmt.Errorf("reset: %s", err)
 		}
 	}
-	if diff := got - lines; diff > 0 {
-		for i := 0; i < diff; i++ {
-			x := bytes.IndexByte(buf, '\n')
-			if x < 0 {
-				break
-			}
-			seek, err = r.Seek(int64(x+1), io.SeekCurrent)
-			if err != nil {
-				return err
-			}
-			buf = buf[x+1:]
-		}
-	}
+  for lines < 0 {
+    x := bytes.IndexByte(buf, '\n')
+    if x < 0 {
+      break
+    }
+    if seek, err = r.Seek(int64(x+1), io.SeekCurrent); err != nil {
+      return err
+    }
+    buf = buf[x+1:]
+    lines++
+  }
 	return err
 }
 

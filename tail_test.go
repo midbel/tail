@@ -26,46 +26,34 @@ var sample = []string{
 }
 
 func TestTail(t *testing.T) {
-	data := []struct {
-		Lines int
-		Want  []string
-	}{
-		{
-			Lines: 1,
-			Want:  sample[14:],
-		},
-		{
-			Lines: 20,
-			Want:  sample[0:],
-		},
-		{
-			Lines: 10,
-			Want:  sample[4:],
-		},
-	}
-	text := strings.Join(sample, "\n")
-	for _, d := range data {
-		t.Logf("tail: %d lines", d.Lines)
-		r := strings.NewReader(text)
-		if err := tail(r, d.Lines); err != nil {
-			t.Errorf("error while tail-ing sample: %s", err)
-			continue
-		}
-		compareLines(t, r, d.Want)
-	}
+  var (
+    text = strings.Join(sample, "\n")
+    size = len(sample) - 1
+  )
+  for i := 1; i < len(sample); i++ {
+    r := strings.NewReader(text)
+    if err := tail(r, i); err != nil {
+      t.Errorf("error while tail-ing sample: %s", err)
+      continue
+    }
+    compareLines(t, r, sample[size-i:])
+  }
 }
 
 func compareLines(t *testing.T, r io.Reader, lines []string) {
 	t.Helper()
 	scan := bufio.NewScanner(r)
-	for i := 0; scan.Scan(); i++ {
-		if i >= len(lines) {
-			t.Errorf("too many lines generated! want %d, got %d", len(lines), i)
-			break
-		}
-		if lines[i] != scan.Text() {
-			t.Errorf("lines mismatched! want: %q, got %q", lines[i], scan.Text())
-			break
-		}
-	}
+  for i := range lines {
+    if !scan.Scan() {
+      t.Errorf("reader is empty! want %s", lines[i])
+      return
+    }
+    if lines[i] != scan.Text() {
+      t.Errorf("lines mismatched! want: %q, got %q", lines[i], scan.Text())
+      break
+    }
+  }
+  for scan.Scan() {
+    t.Errorf("remaining line: %s", scan.Text())
+  }
 }
