@@ -31,7 +31,7 @@ func tail(r io.ReadSeeker, lines int) error {
 		offset int64
 		err    error
 	)
-	if seek, err = r.Seek(0, io.SeekEnd); err != nil {
+	if seek, err = r.Seek(0, io.SeekEnd); err != nil || lines == 0 {
 		return err
 	}
 	offset = seek
@@ -41,6 +41,7 @@ func tail(r io.ReadSeeker, lines int) error {
 	} else {
 		buf, step = make([]byte, seek), seek
 	}
+	lines++
 	for lines > 0 {
 		if seek, err = seekReader(r, seek-step); err != nil {
 			return fmt.Errorf("seek: %s", err)
@@ -54,22 +55,30 @@ func tail(r io.ReadSeeker, lines int) error {
 		}
 	}
 
-	if seek, _ = r.Seek(0, io.SeekCurrent); seek == offset {
+	if k, _ := r.Seek(0, io.SeekCurrent); k == offset {
 		if seek, err = seekReader(r, seek-step); err != nil {
 			return fmt.Errorf("reset: %s", err)
 		}
 	}
-  for lines < 0 {
-    x := bytes.IndexByte(buf, '\n')
-    if x < 0 {
-      break
-    }
-    if seek, err = r.Seek(int64(x+1), io.SeekCurrent); err != nil {
-      return err
-    }
-    buf = buf[x+1:]
-    lines++
-  }
+	lines--
+	if lines < 0 {
+		seek, err = r.Seek(seek, io.SeekStart)
+		if err != nil {
+			return err
+		}
+	}
+	for lines < 0 {
+		x := bytes.IndexByte(buf, '\n')
+		if x < 0 {
+			break
+		}
+		seek += int64(x) + 1
+		buf = buf[x+1:]
+		lines++
+	}
+	if seek, err = r.Seek(seek, io.SeekStart); err != nil {
+		return err
+	}
 	return err
 }
 
